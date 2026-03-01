@@ -1,41 +1,48 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 
 intents = discord.Intents.default()
 intents.guilds = True
-intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 @bot.event
 async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} slash commands.")
+    except Exception as e:
+        print(e)
+
     print(f"Logged in as {bot.user}")
 
 
 # ==============================
-# CATEGORY CLONER
+# SLASH: CLONE CATEGORY
 # ==============================
-@bot.command()
-@commands.has_permissions(manage_channels=True)
-async def clonecategory(ctx, category_id: int, *, new_name: str):
-    guild = ctx.guild
-    old_category = guild.get_channel(category_id)
+@bot.tree.command(name="clonecategory", description="Clone a category and its channels")
+@app_commands.describe(
+    category_id="The ID of the category to clone",
+    new_name="Name for the new category"
+)
+async def clonecategory(interaction: discord.Interaction, category_id: str, new_name: str):
+    await interaction.response.defer()
+
+    guild = interaction.guild
+    old_category = guild.get_channel(int(category_id))
 
     if not old_category or not isinstance(old_category, discord.CategoryChannel):
-        await ctx.send("❌ Invalid category ID.")
+        await interaction.followup.send("❌ Invalid category ID.")
         return
 
-    # Create new category with custom name
     new_category = await guild.create_category(
         name=new_name,
         overwrites=old_category.overwrites
     )
 
-    await ctx.send(f"✅ Created category **{new_name}**. Cloning channels...")
-
-    # Clone channels
     for channel in old_category.channels:
         try:
             if isinstance(channel, discord.TextChannel):
@@ -56,23 +63,26 @@ async def clonecategory(ctx, category_id: int, *, new_name: str):
                     user_limit=channel.user_limit,
                     overwrites=channel.overwrites
                 )
-
         except Exception as e:
-            await ctx.send(f"⚠️ Failed to clone {channel.name}: {e}")
+            await interaction.followup.send(f"⚠️ Failed to clone {channel.name}: {e}")
 
-    await ctx.send("🎉 Category cloned successfully!")
+    await interaction.followup.send("🎉 Category cloned successfully!")
 
 
 # ==============================
-# SEND EMBED COMMAND
+# SLASH: SEND EMBED
 # ==============================
-@bot.command()
-@commands.has_permissions(manage_messages=True)
-async def sendembed(ctx, channel_id: int, title: str, *, description: str):
-    channel = bot.get_channel(channel_id)
+@bot.tree.command(name="sendembed", description="Send an embed to a channel")
+@app_commands.describe(
+    channel_id="Channel ID to send the embed to",
+    title="Embed title",
+    description="Embed description"
+)
+async def sendembed(interaction: discord.Interaction, channel_id: str, title: str, description: str):
+    channel = bot.get_channel(int(channel_id))
 
     if not channel:
-        await ctx.send("❌ Invalid channel ID.")
+        await interaction.response.send_message("❌ Invalid channel ID.", ephemeral=True)
         return
 
     embed = discord.Embed(
@@ -82,11 +92,11 @@ async def sendembed(ctx, channel_id: int, title: str, *, description: str):
     )
 
     await channel.send(embed=embed)
-    await ctx.send("✅ Embed sent!")
+    await interaction.response.send_message("✅ Embed sent!", ephemeral=True)
 
 
 # ==============================
-# RUN BOT (Railway safe)
+# RUN BOT
 # ==============================
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
