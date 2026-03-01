@@ -14,8 +14,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash commands.")
+        # 🔥 PUT YOUR SERVER ID HERE
+        guild = discord.Object(id=1477477283705917503)
+
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced {len(synced)} commands to guild.")
     except Exception as e:
         print(e)
 
