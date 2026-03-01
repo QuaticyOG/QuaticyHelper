@@ -4,7 +4,7 @@ from discord import app_commands
 import os
 
 GUILD_ID = 1477477283705917503
-BOT_ROLE_ID = 1477655449145835774
+BOT_ROLE_ID = 1477661066992287958
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
