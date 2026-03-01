@@ -5,8 +5,11 @@ import os
 import aiosqlite
 import io
 import re
+import html
+from discord.utils import utcnow
 
 BOT_ROLE_ID = 1477661066992287958
+TRANSCRIPT_CHANNEL_ID = 1477673838996357201
 DB_PATH = "quaticy.db"
 
 intents = discord.Intents.default()
@@ -19,6 +22,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # =========================================================
 # DATABASE
 # =========================================================
+
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
@@ -37,6 +41,17 @@ async def init_db():
         """)
         await db.commit()
 
+
+async def get_ticket_owner(channel_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id FROM open_tickets WHERE channel_id=?",
+            (channel_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+
 async def get_ticket_category(guild_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -45,6 +60,7 @@ async def get_ticket_category(guild_id: int):
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else None
+
 
 async def get_existing_ticket(guild_id: int, user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -55,45 +71,165 @@ async def get_existing_ticket(guild_id: int, user_id: int):
             row = await cursor.fetchone()
             return row[0] if row else None
 
-# =========================================================
-# TRANSCRIPT
-# =========================================================
-async def generate_transcript(channel: discord.TextChannel):
-    messages = []
-    async for msg in channel.history(limit=None, oldest_first=True):
-        messages.append(f"[{msg.created_at}] {msg.author}: {msg.content}")
-    data = "\n".join(messages) or "No messages."
-    return io.BytesIO(data.encode()), f"transcript-{channel.name}.txt"
 
 # =========================================================
-# CLOSE VIEW
+# HTML TRANSCRIPT (PREMIUM)
 # =========================================================
+
+async def generate_transcript(channel: discord.TextChannel):
+    rows = []
+
+    async for msg in channel.history(limit=None, oldest_first=True):
+        ts = msg.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        author = html.escape(f"{msg.author} ({msg.author.id})")
+
+        content = html.escape(msg.content or "").replace("\n", "<br>")
+
+        # attachments
+        attach_html = ""
+        if msg.attachments:
+            links = [
+                f'<a href="{html.escape(a.url)}" target="_blank">{html.escape(a.filename)}</a>'
+                for a in msg.attachments
+            ]
+            attach_html = "<div class='meta'><b>Attachments:</b> " + " • ".join(links) + "</div>"
+
+        # embeds summary
+        embed_html = ""
+        if msg.embeds:
+            parts = []
+            for e in msg.embeds:
+                title = html.escape(e.title) if e.title else "Embed"
+                desc = ""
+                if e.description:
+                    desc = html.escape(e.description[:200])
+                    if len(e.description) > 200:
+                        desc += "..."
+                parts.append(
+                    f"<div class='embed'><b>{title}</b><div class='embed-desc'>{desc}</div></div>"
+                )
+            embed_html = "<div class='meta'><b>Embeds:</b></div>" + "".join(parts)
+
+        jump_html = f"<a class='jump' href='{html.escape(msg.jump_url)}' target='_blank'>Jump</a>"
+
+        if not content and (msg.attachments or msg.embeds):
+            content = "<i>(no text)</i>"
+
+        rows.append(f"""
+        <div class="msg">
+          <div class="head">
+            <span class="author">{author}</span>
+            <span class="time">{ts}</span>
+            {jump_html}
+          </div>
+          <div class="body">{content}</div>
+          {attach_html}
+          {embed_html}
+        </div>
+        """)
+
+    guild_name = html.escape(channel.guild.name)
+    channel_name = html.escape(channel.name)
+    topic = html.escape(channel.topic) if channel.topic else "—"
+
+    html_doc = f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Transcript - #{channel_name}</title>
+<style>
+body {{
+  font-family: system-ui;
+  background:#0b0f19;
+  color:#e6e6e6;
+  padding:24px;
+}}
+.msg {{
+  background:#0f1627;
+  border:1px solid #1b2a4a;
+  border-radius:14px;
+  padding:14px;
+  margin:12px 0;
+}}
+.author {{color:#a9c7ff;font-weight:700}}
+.time {{opacity:.7;font-size:12px}}
+.jump {{font-size:12px;color:#7aa2ff;text-decoration:none}}
+.embed {{margin-top:8px;padding:8px;border-left:4px solid #5865F2;background:rgba(88,101,242,.12)}}
+</style>
+</head>
+<body>
+<h2>Transcript • {guild_name} • #{channel_name}</h2>
+<p>Topic: {topic}<br>Exported: {utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
+{''.join(rows) if rows else "<i>No messages.</i>"}
+</body>
+</html>
+"""
+
+    return io.BytesIO(html_doc.encode()), f"transcript-{channel.name}.html"
+
+
+# =========================================================
+# CLOSE VIEW (FIXED)
+# =========================================================
+
 class CloseTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket")
+    @discord.ui.button(
+        label="Close Ticket",
+        style=discord.ButtonStyle.danger,
+        emoji="🔒",
+        custom_id="close_ticket"
+    )
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        # ✅ ACK FIRST (CRITICAL FIX)
+        await interaction.response.defer(ephemeral=True)
+
         channel = interaction.channel
+        guild = interaction.guild
+        archive_channel = guild.get_channel(TRANSCRIPT_CHANNEL_ID)
+
+        owner_id = await get_ticket_owner(channel.id)
+        owner_mention = f"<@{owner_id}>" if owner_id else "Unknown"
 
         file_buffer, filename = await generate_transcript(channel)
-        await channel.send(file=discord.File(file_buffer, filename))
+
+        if archive_channel:
+            embed = discord.Embed(
+                title="📁 Ticket Closed",
+                description=(
+                    f"**Channel:** {channel.name}\n"
+                    f"**Opened by:** {owner_mention}\n"
+                    f"**Closed by:** {interaction.user.mention}"
+                ),
+                color=discord.Color.blurple()
+            )
+            embed.timestamp = utcnow()
+
+            await archive_channel.send(embed=embed)
+            await archive_channel.send(file=discord.File(file_buffer, filename))
 
         async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("DELETE FROM open_tickets WHERE channel_id=?", (channel.id,))
+            await db.execute(
+                "DELETE FROM open_tickets WHERE channel_id=?",
+                (channel.id,)
+            )
             await db.commit()
 
-        await interaction.response.send_message("🔒 Closing ticket...", ephemeral=True)
         await channel.delete()
+
 
 # =========================================================
 # CREATE TICKET
 # =========================================================
+
 async def create_ticket(interaction: discord.Interaction, reason: str, extra_info: str | None = None):
     guild = interaction.guild
     user = interaction.user
 
-    # 🔒 duplicate prevention
+    # prevent duplicates
     existing = await get_existing_ticket(guild.id, user.id)
     if existing:
         ch = guild.get_channel(existing)
@@ -104,7 +240,7 @@ async def create_ticket(interaction: discord.Interaction, reason: str, extra_inf
             )
             return
 
-    # 📂 get category
+    # get category
     category_id = await get_ticket_category(guild.id)
     if not category_id:
         await interaction.response.send_message(
@@ -114,24 +250,23 @@ async def create_ticket(interaction: discord.Interaction, reason: str, extra_inf
         return
 
     category = guild.get_channel(category_id)
-    if not category:
-        await interaction.response.send_message(
-            "❌ Ticket category no longer exists. Please set it again.",
-            ephemeral=True
-        )
-        return
 
-    # 🧠 role-based auto naming (highest role)
-    roles = [r for r in user.roles if r != guild.default_role]
-    top_role = roles[-1] if roles else None
-
+    # highest role naming
+    top_role = user.top_role if user.top_role != guild.default_role else None
     role_name = top_role.name if top_role else "client"
 
-    # clean for Discord channel safety
     safe_role = re.sub(r"[^a-z0-9-]", "", role_name.lower().replace(" ", "-"))
     safe_user = re.sub(r"[^a-z0-9-]", "", user.name.lower().replace(" ", "-"))
 
-    channel_name = f"{safe_role}-{safe_user}"[:95]
+    base_name = f"{safe_role}-{safe_user}"
+    channel_name = base_name[:90]
+
+    # ensure uniqueness
+    existing_names = [c.name for c in category.channels]
+    counter = 1
+    while channel_name in existing_names:
+        channel_name = f"{base_name[:85]}-{counter}"
+        counter += 1
 
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -145,15 +280,13 @@ async def create_ticket(interaction: discord.Interaction, reason: str, extra_inf
         overwrites=overwrites
     )
 
-    # 💾 save ticket
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "REPLACE INTO open_tickets (guild_id, user_id, channel_id) VALUES (?, ?, ?)",
+            "REPLACE INTO open_tickets VALUES (?, ?, ?)",
             (guild.id, user.id, ticket_channel.id)
         )
         await db.commit()
 
-    # 🎨 embed
     embed = discord.Embed(
         title="🎫 Ticket Opened",
         description=f"{user.mention} thanks for opening a ticket.\n\n**Reason:** {reason}",
@@ -163,32 +296,36 @@ async def create_ticket(interaction: discord.Interaction, reason: str, extra_inf
     if extra_info:
         embed.add_field(name="Submitted Info", value=extra_info[:1024], inline=False)
 
-    embed.set_footer(text="Quaticy Support")
-    embed.timestamp = discord.utils.utcnow()
+    embed.timestamp = utcnow()
 
-    await ticket_channel.send(content=user.mention, embed=embed, view=CloseTicketView())
+    await ticket_channel.send(
+        content=user.mention,
+        embed=embed,
+        view=CloseTicketView()
+    )
 
     await interaction.response.send_message(
         f"✅ Ticket created: {ticket_channel.mention}",
         ephemeral=True
     )
+
+
 # =========================================================
-# MODAL
+# MODAL + PANEL
 # =========================================================
+
 class CustomQuoteModal(discord.ui.Modal, title="Custom Quote Request"):
-    member_count = discord.ui.TextInput(label="How many members does your Discord have?", required=True)
-    description = discord.ui.TextInput(label="Tell me about your community", style=discord.TextStyle.paragraph, required=True)
+    member_count = discord.ui.TextInput(label="How many members does your Discord have?")
+    description = discord.ui.TextInput(label="Tell me about your community", style=discord.TextStyle.paragraph)
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_ticket(
             interaction,
             reason="custom-quote",
-            extra_info=f"**Members:** {self.member_count}\n{self.description}"
+            extra_info=f"**Members:** {self.member_count.value}\n{self.description.value}"
         )
 
-# =========================================================
-# PANEL VIEW
-# =========================================================
+
 class TicketPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -201,9 +338,6 @@ class TicketPanelView(discord.ui.View):
     async def questions(self, interaction: discord.Interaction, button: discord.ui.Button):
         await create_ticket(interaction, reason="questions")
 
-# =========================================================
-# YOUR ORIGINAL COMMANDS
-# =========================================================
 
 # ==============================
 # SLASH: CLONE CATEGORY (PRIVATE)
@@ -455,16 +589,16 @@ async def pricing(interaction: discord.Interaction, channel: discord.TextChannel
     await channel.send(embed=embed)
     await interaction.response.send_message("✅ Pricing embed sent!", ephemeral=True)
 
+
 # =========================================================
 # TICKET COMMANDS
 # =========================================================
-@bot.tree.command(name="setticketcategory", description="Set the category where tickets are created")
-@app_commands.describe(category="Category for new tickets")
-async def setticketcategory(interaction: discord.Interaction, category: discord.CategoryChannel):
 
+@bot.tree.command(name="setticketcategory")
+async def setticketcategory(interaction: discord.Interaction, category: discord.CategoryChannel):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "REPLACE INTO ticket_settings (guild_id, category_id) VALUES (?, ?)",
+            "REPLACE INTO ticket_settings VALUES (?, ?)",
             (interaction.guild.id, category.id)
         )
         await db.commit()
@@ -474,25 +608,25 @@ async def setticketcategory(interaction: discord.Interaction, category: discord.
         ephemeral=True
     )
 
-@bot.tree.command(name="ticketpanel", description="Send the ticket panel")
-@app_commands.describe(channel="Channel to send the ticket panel to")
+
+@bot.tree.command(name="ticketpanel")
 async def ticketpanel(interaction: discord.Interaction, channel: discord.TextChannel):
 
     embed = discord.Embed(
         title="🎫 Ticket System",
-        description="To create a ticket, use one of the buttons below depending on your needs.",
+        description="Use the buttons below to open a ticket.",
         color=discord.Color.blurple()
     )
-
-    embed.set_footer(text="Quaticy Helper")
-    embed.timestamp = discord.utils.utcnow()
+    embed.timestamp = utcnow()
 
     await channel.send(embed=embed, view=TicketPanelView())
     await interaction.response.send_message("✅ Ticket panel sent!", ephemeral=True)
 
+
 # =========================================================
 # EVENTS
 # =========================================================
+
 @bot.event
 async def setup_hook():
     await init_db()
@@ -500,12 +634,15 @@ async def setup_hook():
     bot.add_view(CloseTicketView())
     await bot.tree.sync()
 
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
+
 # =========================================================
 # RUN
 # =========================================================
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
