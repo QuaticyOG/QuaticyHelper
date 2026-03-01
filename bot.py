@@ -196,11 +196,12 @@ class TranscriptDownloadView(discord.ui.View):
         self.data = data
         self.fname = fname
 
-    @discord.ui.button(
-        label="Download Transcript",
-        style=discord.ButtonStyle.secondary,
-        emoji="📄"
-    )
+@discord.ui.button(
+    label="Download Transcript",
+    style=discord.ButtonStyle.secondary,
+    emoji="📄",
+    custom_id="download_transcript_btn"
+)
     async def download(self, interaction: discord.Interaction, button: discord.ui.Button):
         file_obj = io.BytesIO(self.data)
         await interaction.response.send_message(
@@ -376,11 +377,21 @@ class TicketPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Custom Quote", style=discord.ButtonStyle.primary, emoji="💼")
+    @discord.ui.button(
+        label="Custom Quote",
+        style=discord.ButtonStyle.primary,
+        emoji="💼",
+        custom_id="ticket_custom_quote_btn"
+    )
     async def custom_quote(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(CustomQuoteModal())
 
-    @discord.ui.button(label="Questions", style=discord.ButtonStyle.secondary, emoji="❓")
+    @discord.ui.button(
+        label="Questions",
+        style=discord.ButtonStyle.secondary,
+        emoji="❓",
+        custom_id="ticket_questions_btn"
+    )
     async def questions(self, interaction: discord.Interaction, button: discord.ui.Button):
         await create_ticket(interaction, reason="questions")
 
