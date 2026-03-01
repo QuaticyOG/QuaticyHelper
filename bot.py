@@ -196,13 +196,17 @@ class TranscriptDownloadView(discord.ui.View):
         self.data = data
         self.fname = fname
 
-@discord.ui.button(
-    label="Download Transcript",
-    style=discord.ButtonStyle.secondary,
-    emoji="📄",
-    custom_id="download_transcript_btn"
-)
-    async def download(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="Download Transcript",
+        style=discord.ButtonStyle.secondary,
+        emoji="📄",
+        custom_id="download_transcript_btn"
+    )
+    async def download(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
         file_obj = io.BytesIO(self.data)
         await interaction.response.send_message(
             file=discord.File(file_obj, self.fname),
