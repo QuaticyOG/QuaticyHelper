@@ -315,14 +315,22 @@ async def create_ticket(interaction: discord.Interaction, reason: str, extra_inf
 # =========================================================
 
 class CustomQuoteModal(discord.ui.Modal, title="Custom Quote Request"):
-    member_count = discord.ui.TextInput(label="How many members does your Discord have?")
-    description = discord.ui.TextInput(label="Tell me about your community", style=discord.TextStyle.paragraph)
+    member_count = discord.ui.TextInput(
+        label="How many members does your Discord have?"
+    )
+    description = discord.ui.TextInput(
+        label="Tell me about your community",
+        style=discord.TextStyle.paragraph
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_ticket(
             interaction,
             reason="custom-quote",
-            extra_info=f"**Members:** {self.member_count.value}\n{self.description.value}"
+            extra_info=(
+                f"**Server Members:** {self.member_count.value}\n\n"
+                f"**Server Info:**\n{self.description.value}"
+            )
         )
 
 
