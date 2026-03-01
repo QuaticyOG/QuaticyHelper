@@ -162,6 +162,104 @@ async def channelexplanation(interaction: discord.Interaction, channel: discord.
     await channel.send(embed=embed)
     await interaction.response.send_message("✅ Explanation embed sent!", ephemeral=True)
 
+
+# ==============================
+# SLASH: PRICING EMBED
+# ==============================
+@bot.tree.command(name="pricing", description="Send the services & pricing embed")
+@app_commands.describe(
+    channel="Channel to send the pricing embed to"
+)
+async def pricing(interaction: discord.Interaction, channel: discord.TextChannel):
+
+    embed = discord.Embed(
+        title="💼 Quaticy Services & Pricing",
+        description="Upgrade your Discord experience with professional development and setup services.",
+        color=discord.Color.blurple()
+    )
+
+    # 🤖 BOT DEVELOPMENT
+    embed.add_field(
+        name="🤖 Custom Bot Development",
+        value=(
+            "**⚡ Bot Spark — $19**\n"
+            "• Up to 3 custom commands\n"
+            "• Basic bot setup\n"
+            "• 1 moderation command\n"
+            "• JSON database\n"
+            "• 2-day delivery • 1 revision\n\n"
+
+            "**🔥 Bot Forge — $49**\n"
+            "• Up to 8 custom commands\n"
+            "• Full moderation system\n"
+            "• JSON or SQLite database\n"
+            "• Custom embeds • Help command\n"
+            "• 3–4 day delivery • 2 revisions\n\n"
+
+            "**👑 Bot Overlord — $99**\n"
+            "• Up to 15 custom commands\n"
+            "• Advanced systems (tickets, levels, etc.)\n"
+            "• SQLite database\n"
+            "• Fully customized bot\n"
+            "• Priority support\n"
+            "• 5–7 day delivery • 3 revisions\n\n"
+            "➡️ Order: https://www.quaticy.com/GetYourBot"
+        ),
+        inline=False
+    )
+
+    # 🛠️ SERVER SETUP
+    embed.add_field(
+        name="🛠️ Professional Server Setup",
+        value=(
+            "**⚡ Server Spark — $15**\n"
+            "• Server creation\n"
+            "• Basic channel setup\n"
+            "• Basic roles\n"
+            "• Rules channel • Welcome message\n"
+            "• Clean layout\n"
+            "• 2-day delivery • 1 revision\n\n"
+
+            "**🔥 Server Forge — $39**\n"
+            "• Everything in Basic\n"
+            "• Advanced channel organization\n"
+            "• Moderation bot setup\n"
+            "• Reaction roles • Auto-mod setup\n"
+            "• Permission tuning\n"
+            "• 3-day delivery • 2 revisions\n\n"
+
+            "**👑 Server Overlord — $79**\n"
+            "• Everything in Standard\n"
+            "• Fully customized server design\n"
+            "• Ticket system • Level system\n"
+            "• Advanced permissions\n"
+            "• Full bot integrations\n"
+            "• Server optimization • Priority support\n\n"
+            "➡️ Order: https://www.quaticy.com/OrderServer"
+        ),
+        inline=False
+    )
+
+    # 📈 LONG TERM
+    embed.add_field(
+        name="📈 Long-Term Server Management",
+        value=(
+            "Hire me for ongoing development and maintenance:\n"
+            "• Bot development whenever needed\n"
+            "• Continuous server improvements\n"
+            "• Ongoing technical support\n\n"
+            "💬 Open a ticket for a custom quote."
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Quaticy Helper")
+    embed.timestamp = discord.utils.utcnow()
+
+    await channel.send(embed=embed)
+    await interaction.response.send_message("✅ Pricing embed sent!", ephemeral=True)
+
+
 # ==============================
 # GLOBAL SYNC (clean)
 # ==============================
