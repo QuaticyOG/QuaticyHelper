@@ -3,8 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 
-GUILD_ID = 1477477283705917503
-BOT_ROLE_ID = 1477661066992287958
+BOT_ROLE_ID = 1477661066992287958  # your bot role ID
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -16,9 +15,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.tree.command(name="clonecategory", description="Clone a category privately")
 @app_commands.describe(
     category_id="The ID of the category to clone",
-    new_name="Name for the new category"
+    new_name="Name for the new category (without brackets)",
+    allowed_role="Extra role that can access the category"
 )
-async def clonecategory(interaction: discord.Interaction, category_id: str, new_name: str):
+async def clonecategory(
+    interaction: discord.Interaction,
+    category_id: str,
+    new_name: str,
+    allowed_role: discord.Role
+):
     await interaction.response.defer(ephemeral=True)
 
     guild = interaction.guild
@@ -33,16 +38,32 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
         await interaction.followup.send("❌ Bot role not found.")
         return
 
+    # 🔥 AUTO FORMAT NAME → 〔 NAME 〕
+    formatted_name = f"〔 {new_name} 〕"
+
     # 🔒 PRIVATE OVERWRITES
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        interaction.user: discord.PermissionOverwrite(view_channel=True),
-        bot_role: discord.PermissionOverwrite(view_channel=True),
+        interaction.user: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True
+        ),
+        bot_role: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True
+        ),
+        allowed_role: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True
+        ),
     }
 
     # Create private category
     new_category = await guild.create_category(
-        name=new_name,
+        name=formatted_name,
         overwrites=overwrites
     )
 
@@ -65,6 +86,7 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
                     bitrate=channel.bitrate,
                     user_limit=channel.user_limit
                 )
+
         except Exception as e:
             await interaction.followup.send(f"⚠️ Failed to clone {channel.name}: {e}")
 
@@ -80,7 +102,12 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
     title="Embed title",
     description="Embed description"
 )
-async def sendembed(interaction: discord.Interaction, channel_id: str, title: str, description: str):
+async def sendembed(
+    interaction: discord.Interaction,
+    channel_id: str,
+    title: str,
+    description: str
+):
     channel = bot.get_channel(int(channel_id))
 
     if not channel:
@@ -98,9 +125,8 @@ async def sendembed(interaction: discord.Interaction, channel_id: str, title: st
 
 
 # ==============================
-# SYNC
+# GLOBAL SYNC (clean)
 # ==============================
-
 @bot.event
 async def setup_hook():
     try:
@@ -115,5 +141,8 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
 
+# ==============================
+# RUN BOT
+# ==============================
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
