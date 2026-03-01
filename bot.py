@@ -3,6 +3,8 @@ from discord.ext import commands
 from discord import app_commands
 import os
 
+BOT_ROLE_ID = 1477655449145835774  # your bot role ID
+
 intents = discord.Intents.default()
 intents.guilds = True
 
@@ -21,15 +23,15 @@ async def on_ready():
 
 
 # ==============================
-# SLASH: CLONE CATEGORY
+# SLASH: CLONE CATEGORY (PRIVATE)
 # ==============================
-@bot.tree.command(name="clonecategory", description="Clone a category and its channels")
+@bot.tree.command(name="clonecategory", description="Clone a category privately")
 @app_commands.describe(
     category_id="The ID of the category to clone",
     new_name="Name for the new category"
 )
 async def clonecategory(interaction: discord.Interaction, category_id: str, new_name: str):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     guild = interaction.guild
     old_category = guild.get_channel(int(category_id))
@@ -38,11 +40,25 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
         await interaction.followup.send("❌ Invalid category ID.")
         return
 
+    bot_role = guild.get_role(BOT_ROLE_ID)
+    if not bot_role:
+        await interaction.followup.send("❌ Bot role not found.")
+        return
+
+    # 🔒 PRIVATE OVERWRITES
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        interaction.user: discord.PermissionOverwrite(view_channel=True),
+        bot_role: discord.PermissionOverwrite(view_channel=True),
+    }
+
+    # Create private category
     new_category = await guild.create_category(
         name=new_name,
-        overwrites=old_category.overwrites
+        overwrites=overwrites
     )
 
+    # Clone channels inside
     for channel in old_category.channels:
         try:
             if isinstance(channel, discord.TextChannel):
@@ -51,7 +67,6 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
                     category=new_category,
                     topic=channel.topic,
                     slowmode_delay=channel.slowmode_delay,
-                    overwrites=channel.overwrites,
                     nsfw=channel.nsfw
                 )
 
@@ -60,13 +75,13 @@ async def clonecategory(interaction: discord.Interaction, category_id: str, new_
                     name=channel.name,
                     category=new_category,
                     bitrate=channel.bitrate,
-                    user_limit=channel.user_limit,
-                    overwrites=channel.overwrites
+                    user_limit=channel.user_limit
                 )
+
         except Exception as e:
             await interaction.followup.send(f"⚠️ Failed to clone {channel.name}: {e}")
 
-    await interaction.followup.send("🎉 Category cloned successfully!")
+    await interaction.followup.send("🔒 Private category cloned successfully!")
 
 
 # ==============================
@@ -95,8 +110,5 @@ async def sendembed(interaction: discord.Interaction, channel_id: str, title: st
     await interaction.response.send_message("✅ Embed sent!", ephemeral=True)
 
 
-# ==============================
-# RUN BOT
-# ==============================
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
