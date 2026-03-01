@@ -12,11 +12,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 @bot.event
-async def on_ready():
+async def setup_hook():
     try:
-        # 🔥 PUT YOUR SERVER ID HERE
         guild = discord.Object(id=1477477283705917503)
-
         synced = await bot.tree.sync(guild=guild)
         print(f"Synced {len(synced)} commands to guild.")
     except Exception as e:
