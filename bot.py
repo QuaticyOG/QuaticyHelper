@@ -100,15 +100,18 @@ async def sendembed(interaction: discord.Interaction, channel_id: str, title: st
 # ==============================
 # SYNC
 # ==============================
+
 @bot.event
-async def on_ready():
+async def setup_hook():
     try:
-        guild = discord.Object(id=GUILD_ID)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"Synced {len(synced)} commands to guild.")
+        synced = await bot.tree.sync()
+        print(f"Globally synced {len(synced)} commands.")
     except Exception as e:
         print("Sync error:", e)
 
+
+@bot.event
+async def on_ready():
     print(f"Logged in as {bot.user}")
 
 
