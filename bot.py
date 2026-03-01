@@ -125,6 +125,44 @@ async def sendembed(
 
 
 # ==============================
+# SLASH: CHANNEL EXPLANATION EMBED
+# ==============================
+@bot.tree.command(name="channelexplanation", description="Send the channel explanation embed")
+@app_commands.describe(
+    channel="Channel to send the explanation embed to"
+)
+async def channelexplanation(interaction: discord.Interaction, channel: discord.TextChannel):
+    embed = discord.Embed(
+        title="Channel Explanation",
+        description="Below is a brief explanation of what each channel in your category is used for:",
+        color=discord.Color.blurple()
+    )
+
+    embed.add_field(
+        name="💬 discussion",
+        value="This channel is for all general communication between us. Feel free to ask questions, share ideas, or request changes here.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🚧 progress",
+        value="I will post updates here regarding the status of your setup, including what has been completed and what is in progress.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📢 notices",
+        value="This channel is used for important notices from my side, such as availability updates or schedule changes.",
+        inline=False
+    )
+
+    embed.set_footer(text="Quaticy Helper")
+    embed.timestamp = discord.utils.utcnow()
+
+    await channel.send(embed=embed)
+    await interaction.response.send_message("✅ Explanation embed sent!", ephemeral=True)
+
+# ==============================
 # GLOBAL SYNC (clean)
 # ==============================
 @bot.event
