@@ -599,7 +599,7 @@ async def pricing(interaction: discord.Interaction, channel: discord.TextChannel
         inline=False
     )
 
-    embed.set_footer(text="Quaticy Helper")
+    embed.set_footer(text="Quaticy Helper / https://www.quaticy.com")
     embed.timestamp = discord.utils.utcnow()
 
     await channel.send(embed=embed)
